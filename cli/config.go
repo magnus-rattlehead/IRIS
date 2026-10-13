@@ -59,6 +59,9 @@ expand-alias = true
 # automatically execute command after accepting suggestion
 auto-execute = false
 
+# complete matching paths in arguments, even for unknown commands
+path-completion = false
+
 # 0 = off, 1 = atuin history only, 2 = atuin history + default history
 atuin-history = 0
 

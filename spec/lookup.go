@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/versenilvis/iris/integration/shell"
+	"github.com/versenilvis/iris/internal/config"
 	"github.com/versenilvis/iris/internal/logger"
 	"github.com/versenilvis/iris/spec/alias"
 )
@@ -197,6 +198,14 @@ func Lookup(input string) []Suggestion {
 
 	rootCmdName := tokens[0]
 	spec, exists := Registry[rootCmdName]
+	partial := tokens[len(tokens)-1]
+	if config.Get().Core.PathCompletion && partial != "" && !strings.HasPrefix(partial, "-") {
+		files := FileGenerator()(tokens, rootCmdName, partial)
+		if len(files) > 0 {
+			spec = &Spec{Generator: func(_ []string, _, _ string) []Suggestion { return files }}
+			exists = true
+		}
+	}
 	logger.Debugf("core lookup tokens: %v, registry exists: %v", tokens, exists)
 	if !exists {
 		partial := tokens[len(tokens)-1]
@@ -270,7 +279,6 @@ func Lookup(input string) []Suggestion {
 		}
 	}
 
-	partial := tokens[len(tokens)-1]
 	allowMoreArgs := currentLimit <= 0 || argCount < currentLimit
 
 	logger.Debugf("core query tokens: %v (partial: '%s')", tokens, partial)
