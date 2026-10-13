@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/versenilvis/iris/integration/shell"
-	"github.com/versenilvis/iris/internal/config"
 	"github.com/versenilvis/iris/internal/logger"
 	"github.com/versenilvis/iris/spec/alias"
 )
@@ -199,16 +198,8 @@ func Lookup(input string) []Suggestion {
 	rootCmdName := tokens[0]
 	spec, exists := Registry[rootCmdName]
 	partial := tokens[len(tokens)-1]
-	if config.Get().Core.PathCompletion && partial != "" && !strings.HasPrefix(partial, "-") {
-		files := FileGenerator()(tokens, rootCmdName, partial)
-		if len(files) > 0 {
-			spec = &Spec{Generator: func(_ []string, _, _ string) []Suggestion { return files }}
-			exists = true
-		}
-	}
 	logger.Debugf("core lookup tokens: %v, registry exists: %v", tokens, exists)
 	if !exists {
-		partial := tokens[len(tokens)-1]
 		args := tokens[1:]
 		if len(args) > 0 && args[len(args)-1] == partial {
 			args = args[:len(args)-1]
@@ -216,7 +207,10 @@ func Lookup(input string) []Suggestion {
 		if cobSugg := QueryCobraComplete(rootCmdName, args, partial); len(cobSugg) > 0 {
 			return cobSugg
 		}
-		return nil
+		if strings.HasPrefix(partial, "-") {
+			return nil
+		}
+		spec = &Spec{Generator: FileGenerator()}
 	}
 
 	currentSubs, currentOpts, currentGen := spec.Subcommands, spec.Options, spec.Generator

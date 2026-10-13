@@ -69,7 +69,6 @@ type CoreConfig struct {
 	Atuin             int    `toml:"atuin-history"`
 	AtuinDBPath       string `toml:"atuin-db-path"`
 	CobraProbeEnabled bool   `toml:"cobra-probe-enabled"`
-	PathCompletion    bool   `toml:"path-completion"`
 	// NavigateClosed decides what the navigate keys do while the suggestion
 	// menu is closed: "history" browses iris' own merged history (the default),
 	// "shell" forwards the key to the shell instead.
