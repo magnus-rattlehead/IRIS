@@ -197,9 +197,9 @@ func Lookup(input string) []Suggestion {
 
 	rootCmdName := tokens[0]
 	spec, exists := Registry[rootCmdName]
+	partial := tokens[len(tokens)-1]
 	logger.Debugf("core lookup tokens: %v, registry exists: %v", tokens, exists)
 	if !exists {
-		partial := tokens[len(tokens)-1]
 		args := tokens[1:]
 		if len(args) > 0 && args[len(args)-1] == partial {
 			args = args[:len(args)-1]
@@ -207,7 +207,10 @@ func Lookup(input string) []Suggestion {
 		if cobSugg := QueryCobraComplete(rootCmdName, args, partial); len(cobSugg) > 0 {
 			return cobSugg
 		}
-		return nil
+		if strings.HasPrefix(partial, "-") {
+			return nil
+		}
+		spec = &Spec{Generator: FileGenerator()}
 	}
 
 	currentSubs, currentOpts, currentGen := spec.Subcommands, spec.Options, spec.Generator
@@ -270,7 +273,6 @@ func Lookup(input string) []Suggestion {
 		}
 	}
 
-	partial := tokens[len(tokens)-1]
 	allowMoreArgs := currentLimit <= 0 || argCount < currentLimit
 
 	logger.Debugf("core query tokens: %v (partial: '%s')", tokens, partial)
