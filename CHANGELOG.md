@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.4](https://github.com/versenilvis/iris/releases/tag/v0.7.4) - 2026-10-17
+
+### Bug fixes
+
+- Prevent IRIS autocomplete overlay from drawing over command text (also cleanup ghost text) ([#178](https://github.com/versenilvis/iris/issues/178)) ([4c7d66](https://github.com/versenilvis/iris/commit/4c7d665e0fcde4089f8a33f760510195d39dd414))
+
+### Documentation
+
+- Replace fixed dimensions with fluid width ([#177](https://github.com/versenilvis/iris/issues/177)) ([38215d](https://github.com/versenilvis/iris/commit/38215d7a0c4f952c01a52f6101d00543fc9edff6))
+
+### Features
+
+- Always enable path completion even if a spec isn't registered ([#176](https://github.com/versenilvis/iris/issues/176)) ([96597b](https://github.com/versenilvis/iris/commit/96597b495b2aba305b0687e9460b06fab0a44208))
+
 ## [v0.7.3](https://github.com/versenilvis/iris/releases/tag/v0.7.3) - 2026-10-09
 
 ### Features
