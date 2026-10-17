@@ -557,7 +557,7 @@ func runWrapper() {
 			// the highlight moves now, but the shell's line only catches up
 			// when the held-back rewrite lands
 			overlay.SetSelection(bufCopy)
-			overlay.SetCursorAtEnd(offsetCopy == 0)
+			overlay.SetCursorOffset(offsetCopy)
 
 			draw := func() {
 				var b strings.Builder
@@ -954,6 +954,8 @@ func runWrapper() {
 		aiMu.Unlock()
 
 		var b strings.Builder
+		overlay.SetScreenLine(queryForSearch)
+		overlay.SetCursorOffset(offsetCopy)
 		if !navCopy {
 			// bufCopy is only the text before the cursor. An empty one means the
 			// cursor sits at the start of a line that still has content, which
@@ -967,7 +969,7 @@ func runWrapper() {
 			logger.Debugf("Render results found: %d", len(results))
 
 			if len(results) == 0 || (len(results) == 1 && strings.TrimSpace(results[0].Cmd) == strings.TrimSpace(bufCopy) && !strings.HasSuffix(bufCopy, " ")) {
-				b.WriteString(overlay.HideMenu(bufCopy))
+				b.WriteString(overlay.HideMenu(queryForSearch))
 				writeStdout([]byte(b.String()))
 				return
 			}
@@ -975,7 +977,7 @@ func runWrapper() {
 			if overlay.IsVisible() {
 				b.WriteString(overlay.Clear())
 			}
-			overlay.SetQueryAndItems(bufCopy, results)
+			overlay.SetQueryAndItems(queryForSearch, results)
 		} else {
 			if overlay.IsVisible() {
 				b.WriteString(overlay.Clear())
@@ -983,7 +985,6 @@ func runWrapper() {
 		}
 
 		overlay.SetUserNavigated(navCopy)
-		overlay.SetCursorAtEnd(offsetCopy == 0)
 		if !disableGhostText.Load() {
 			b.WriteString(overlay.RenderGhostText(bufCopy, navCopy, offsetCopy == 0))
 		}

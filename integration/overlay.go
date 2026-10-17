@@ -209,7 +209,8 @@ type Overlay struct {
 	// CursorAtEnd gates the erase that follows the input onto a new wrapped
 	// row: it walks to the end-of-text column, which is only where the cursor
 	// really is when nothing has moved it left.
-	CursorAtEnd bool
+	CursorAtEnd  bool
+	cursorOffset int
 	// anchorCol pins the box's column for as long as the user is walking the
 	// list. Selecting an entry rewrites the line, so following the cursor makes
 	// the box jump left and right under the entry being read.
@@ -240,6 +241,23 @@ func (o *Overlay) SetCursorAtEnd(v bool) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.CursorAtEnd = v
+	if v {
+		o.cursorOffset = 0
+	}
+}
+
+func (o *Overlay) SetCursorOffset(offset int) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.cursorOffset = max(offset, 0)
+	o.CursorAtEnd = offset == 0
+}
+
+func (o *Overlay) rowsBelowCursor() int {
+	runes := []rune(o.ScreenLine)
+	end := len(runes) - min(o.cursorOffset, len(runes))
+	return inputRows(o.PromptLen+lipgloss.Width(o.ScreenLine)) -
+		inputRows(o.PromptLen+lipgloss.Width(string(runes[:end])))
 }
 
 func (o *Overlay) SetPromptLen(l int) {
@@ -581,6 +599,16 @@ func (o *Overlay) RenderGhostText(buffer string, userNavigated bool, cursorAtEnd
 	}
 
 	s.WriteString(ansi.SaveCursor)
+	if !cursorAtEnd && o.cursorOffset > 0 {
+		// Ghost text belongs after the command, even after the cursor moves back.
+		if rows := o.rowsBelowCursor(); rows > 0 {
+			s.WriteString(ansi.CursorDown(rows))
+		}
+		s.WriteString("\r")
+		if col := (o.PromptLen + lipgloss.Width(o.ScreenLine)) % termWidth(); col > 0 {
+			s.WriteString(ansi.CursorForward(col))
+		}
+	}
 	if ghostText != "" {
 		styled := lipgloss.NewStyle().Foreground(lipgloss.Color(config.Theme().GhostText)).Render(ghostText)
 		s.WriteString(styled)
@@ -682,9 +710,11 @@ func (o *Overlay) draw() string {
 	// wrapped, so using PromptLen directly overflows the screen and the box
 	// lands at the wrong horizontal position.
 	totalCol := o.PromptLen + typedLen
-	cursorCol := totalCol
+	runes := []rune(o.ScreenLine)
+	cursorTotalCol := o.PromptLen + lipgloss.Width(string(runes[:len(runes)-min(o.cursorOffset, len(runes))]))
+	cursorCol := cursorTotalCol
 	if width > 0 {
-		cursorCol = totalCol % width
+		cursorCol = cursorTotalCol % width
 	}
 	targetCol := cursorCol
 	if targetCol+boxWidth > width {
@@ -758,9 +788,10 @@ func (o *Overlay) draw() string {
 	end := start + windowSize
 	totalLines := windowSize + borderLines
 	lastDrawnLines.Store(int32(totalLines))
+	inputBelow := o.rowsBelowCursor()
 
-	s.WriteString(strings.Repeat("\n", totalLines))
-	s.WriteString(ansi.CursorUp(totalLines))
+	s.WriteString(strings.Repeat("\n", totalLines+inputBelow))
+	s.WriteString(ansi.CursorUp(totalLines + inputBelow))
 
 	s.WriteString(ansi.SaveCursor)
 
@@ -778,7 +809,7 @@ func (o *Overlay) draw() string {
 
 	// top side border with scroll counter
 	s.WriteString(ansi.RestoreCursor)
-	s.WriteString(ansi.CursorDown(1))
+	s.WriteString(ansi.CursorDown(inputBelow + 1))
 	s.WriteString(ansi.EraseEntireLine)
 	moveToTarget()
 
@@ -809,7 +840,7 @@ func (o *Overlay) draw() string {
 
 	for i := start; i < end; i++ {
 		s.WriteString(ansi.RestoreCursor)
-		s.WriteString(ansi.CursorDown((i - start) + 2))
+		s.WriteString(ansi.CursorDown(inputBelow + (i - start) + 2))
 		s.WriteString(ansi.EraseEntireLine)
 		moveToTarget()
 
@@ -916,7 +947,7 @@ func (o *Overlay) draw() string {
 
 	// bottom side border with footer shortcut hints
 	s.WriteString(ansi.RestoreCursor)
-	s.WriteString(ansi.CursorDown(windowSize + 2))
+	s.WriteString(ansi.CursorDown(inputBelow + windowSize + 2))
 	s.WriteString(ansi.EraseEntireLine)
 	moveToTarget()
 
@@ -935,7 +966,7 @@ func (o *Overlay) draw() string {
 	// the previous box sat lower down; erase the rows this one leaves behind
 	for i := range wrapShift {
 		s.WriteString(ansi.RestoreCursor)
-		s.WriteString(ansi.CursorDown(totalLines + i + 1))
+		s.WriteString(ansi.CursorDown(inputBelow + totalLines + i + 1))
 		s.WriteString("\r" + ansi.EraseEntireLine)
 	}
 
@@ -946,11 +977,11 @@ func (o *Overlay) draw() string {
 
 // clearLinesBelow erases n lines below the cursor, leaving the cursor where
 // it started. Caller is responsible for wrapping/resetting auto-wrap mode.
-func clearLinesBelow(s *strings.Builder, n int) {
+func clearLinesBelow(s *strings.Builder, skip, n int) {
 	s.WriteString(ansi.SaveCursor)
 	for i := range n {
 		s.WriteString(ansi.RestoreCursor)
-		s.WriteString(ansi.CursorDown(i + 1))
+		s.WriteString(ansi.CursorDown(skip + i + 1))
 		s.WriteString("\r" + ansi.EraseEntireLine)
 	}
 	s.WriteString(ansi.RestoreCursor)
@@ -962,7 +993,7 @@ func (o *Overlay) Clear() string {
 
 	var s strings.Builder
 	s.WriteString(ansi.ResetModeAutoWrap)
-	clearLinesBelow(&s, clearRows())
+	clearLinesBelow(&s, o.rowsBelowCursor(), clearRows())
 	s.WriteString(ansi.SetModeAutoWrap)
 	return s.String()
 }
@@ -993,7 +1024,7 @@ func (o *Overlay) HideMenu(query string) string {
 		o.LastGhostLen = 0
 	}
 
-	clearLinesBelow(&s, clearRows())
+	clearLinesBelow(&s, o.rowsBelowCursor(), clearRows())
 	// the box is gone, so nothing is hanging below a wrapped input any more
 	lastDrawnInputRows.Store(0)
 	o.hasAnchor = false
@@ -1012,7 +1043,6 @@ func (o *Overlay) ClearAndDisable() string {
 	o.Visible = false
 	o.Items = nil
 	o.TypedQuery = ""
-	o.ScreenLine = ""
 	o.UserNavigated = false
 	o.Cursor = 0
 	o.StartIdx = 0
@@ -1027,7 +1057,8 @@ func (o *Overlay) ClearAndDisable() string {
 		o.LastGhostLen = 0
 	}
 
-	clearLinesBelow(&s, clearRows())
+	clearLinesBelow(&s, o.rowsBelowCursor(), clearRows())
+	o.ScreenLine = ""
 	// the box is gone, so nothing is hanging below a wrapped input any more
 	lastDrawnInputRows.Store(0)
 	o.hasAnchor = false
